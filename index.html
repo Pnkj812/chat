@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat App</title>
+    <script defer src="http://localhost:8000/socket.io/socket.io.js"></script>
+    <script defer src="client.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: var(--bg-color);
+        transition: background 0.4s ease-in-out;
+        overflow: hidden;
+      }
+
+      :root {
+        --bg-color: #f0f0f0;
+        --card-bg: #ffffff;
+        --text-color: #222;
+        --input-bg: #f9f9f9;
+        --btn-bg: #4caf50;
+        --btn-text: #fff;
+        --bubble-user: #4caf50;
+        --bubble-other: #ddd;
+      }
+
+      body.dark {
+        --bg-color: #0d0d0d;
+        --card-bg: #1a1a1a;
+        --text-color: #f1f1f1;
+        --input-bg: #2a2a2a;
+        --btn-bg: #4caf50;
+        --btn-text: #fff;
+        --bubble-user: #2e7d32;
+        --bubble-other: #444;
+      }
+
+      nav {
+        width: 95%;
+        max-width: 700px;
+        height: 85vh;
+        background: var(--card-bg);
+        padding: 20px;
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        animation: slideIn 0.6s ease;
+        z-index: 2; /* above bubbles */
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(40px) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .logo {
+        display: block;
+        margin: auto;
+        width: 55px;
+        height: 55px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-bottom: 10px;
+        animation: popLogo 0.6s ease;
+      }
+
+      @keyframes popLogo {
+        0% {
+          transform: scale(0.5);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      /* Chat container */
+      .container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 15px;
+        background: var(--input-bg);
+        border-radius: 14px;
+        box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.2);
+        color: var(--text-color);
+        margin-bottom: 15px;
+        animation: fadeIn 0.6s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* Chat bubbles */
+      .message {
+        max-width: 65%;
+        padding: 10px 15px;
+        border-radius: 12px;
+        line-height: 1.4;
+        font-size: 0.95rem;
+        margin: 10px;
+        animation: popIn 0.3s ease;
+        clear: both;
+        word-wrap: break-word;
+        position: relative;
+      }
+
+      .r {
+        background: var(--bubble-user);
+        color: #fff;
+        float: right;
+        border-bottom-right-radius: 2px;
+      }
+
+      .l {
+        background: var(--bubble-other);
+        color: var(--text-color);
+        float: left;
+        border-bottom-left-radius: 2px;
+      }
+
+      @keyframes popIn {
+        0% {
+          opacity: 0;
+          transform: scale(0.7) translateY(15px);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+
+      /* Send box */
+      .send {
+        margin-top: 10px;
+      }
+
+      #send-container {
+        display: flex;
+        gap: 10px;
+      }
+
+      #messageInp {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 10px;
+        background: var(--input-bg);
+        color: var(--text-color);
+        outline: none;
+        font-size: 1rem;
+      }
+
+      .btn {
+        padding: 12px 18px;
+        border: none;
+        border-radius: 10px;
+        background: var(--btn-bg);
+        color: var(--btn-text);
+        font-weight: bold;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px) scale(1.05);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      }
+
+      .btn:active {
+        transform: scale(0.9);
+      }
+
+      /* Dark Mode Toggle */
+      .toggle-mode {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        padding: 8px 16px;
+        border-radius: 8px;
+        background: var(--card-bg);
+        border: 1px solid #444;
+        color: var(--text-color);
+        cursor: pointer;
+        transition: all 0.3s;
+        z-index: 3;
+      }
+
+      .toggle-mode:hover {
+        background: var(--btn-bg);
+        color: #fff;
+      }
+
+      /* Typing animation */
+      .typing {
+        position: absolute;
+        bottom: 80px;
+        left: 35px;
+        font-size: 0.9rem;
+        color: var(--text-color);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        animation: fadeIn 0.3s ease;
+      }
+
+      .typing span {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        background: var(--text-color);
+        border-radius: 50%;
+        animation: bounce 1.3s infinite;
+      }
+
+      .typing span:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+
+      .typing span:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes bounce {
+        0%,
+        80%,
+        100% {
+          transform: scale(0);
+        }
+        40% {
+          transform: scale(1);
+        }
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      /* Emoji Reaction */
+      .reaction-menu {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        display: none;
+        gap: 5px;
+        background: var(--card-bg);
+        padding: 5px 8px;
+        border-radius: 10px;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+        animation: fadeIn 0.3s ease;
+      }
+
+      .reaction-menu span {
+        cursor: pointer;
+        font-size: 1.2rem;
+        transition: transform 0.2s;
+      }
+
+      .reaction-menu span:hover {
+        transform: scale(1.3);
+      }
+
+      .message:hover .reaction-menu {
+        display: flex;
+      }
+
+      .reaction {
+        margin-left: 5px;
+        font-size: 1.1rem;
+        animation: popReaction 0.4s ease;
+      }
+
+      @keyframes popReaction {
+        0% {
+          transform: scale(0);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      .time {
+        font-size: 0.7rem;
+        color: gray;
+        margin-top: 3px;
+        text-align: right;
+      }
+
+      /* BUBBLE BACKGROUND */
+      .bubbles {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        z-index: 0;
+      }
+
+      .bubble {
+        position: absolute;
+        bottom: -150px;
+        background: rgba(255, 105, 180, 0.4);
+        border-radius: 50%;
+        animation: rise 20s infinite ease-in;
+      }
+
+      .bubble:nth-child(1) {
+        width: 120px;
+        height: 120px;
+        left: 25%;
+        animation-duration: 18s;
+        background: rgba(255, 182, 193, 0.5);
+      }
+      .bubble:nth-child(2) {
+        width: 200px;
+        height: 200px;
+        left: 10%;
+        animation-duration: 25s;
+        background: rgba(173, 216, 230, 0.4);
+      }
+      .bubble:nth-child(3) {
+        width: 150px;
+        height: 150px;
+        left: 70%;
+        animation-duration: 22s;
+        background: rgba(221, 160, 221, 0.4);
+      }
+      .bubble:nth-child(4) {
+        width: 90px;
+        height: 90px;
+        left: 50%;
+        animation-duration: 15s;
+        background: rgba(144, 238, 144, 0.4);
+      }
+
+      @keyframes rise {
+        0% {
+          transform: translateY(0) scale(1);
+          opacity: 0.7;
+        }
+        50% {
+          opacity: 0.5;
+        }
+        100% {
+          transform: translateY(-1000px) scale(1.3);
+          opacity: 0;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Bubble background -->
+    <div class="bubbles">
+      <div class="bubble"></div>
+      <div class="bubble"></div>
+      <div class="bubble"></div>
+      <div class="bubble"></div>
+    </div>
+
+    <button class="toggle-mode" onclick="toggleDarkMode()">🌙 Dark Mode</button>
+
+    <nav>
+      <img class="logo" src="logo.jpg" alt="profile" />
+
+      <div class="container">
+        <!-- Messages will be appended here -->
+      </div>
+
+      <!-- Typing indicator -->
+      <div id="typing-indicator" class="typing hidden"></div>
+
+      <div class="send">
+        <form action="#" id="send-container">
+          <input
+            type="text"
+            name="messageInp"
+            id="messageInp"
+            placeholder="Type your message..."
+          />
+          <button class="btn" id="btnh" type="submit">Send</button>
+        </form>
+      </div>
+    </nav>
+
+    <script>
+      function toggleDarkMode() {
+        document.body.classList.toggle("dark");
+        let btn = document.querySelector(".toggle-mode");
+        if (document.body.classList.contains("dark")) {
+          btn.textContent = "☀️ Light Mode";
+        } else {
+          btn.textContent = "🌙 Dark Mode";
+        }
+      }
+    </script>
+  </body>
+</html>
